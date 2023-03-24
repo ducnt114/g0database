@@ -1,2 +1,3 @@
 # g0database
-G0 Database
+
+A SQL database is written from scratch in Go
