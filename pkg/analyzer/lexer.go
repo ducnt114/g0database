@@ -1,10 +1,13 @@
-package lexer
+package analyzer
 
 import (
-	"github.com/ducnt114/g0database/pkg/sql"
 	"regexp"
 	"strings"
 )
+
+type Lexer interface {
+	Analyze(string) ([]Token, error)
+}
 
 const (
 	pattern1 = `^varchar\([0-9][0-9]*\)$`
@@ -35,8 +38,8 @@ func NewNaiveLexer() Lexer {
 	return res
 }
 
-func (l *naiveLexer) Analyze(sqlCmd string) ([]sql.Token, error) {
-	res := make([]sql.Token, 0)
+func (l *naiveLexer) Analyze(sqlCmd string) ([]Token, error) {
+	res := make([]Token, 0)
 	lowerCaseCmd := strings.ToLower(sqlCmd)
 	lowerCaseCmd = strings.ReplaceAll(lowerCaseCmd, "\n", "")
 	lowerCaseCmd = strings.ReplaceAll(lowerCaseCmd, "\t", "")
@@ -44,7 +47,7 @@ func (l *naiveLexer) Analyze(sqlCmd string) ([]sql.Token, error) {
 	for _, item := range items {
 		tokens := l.parseToken(item)
 		for _, token := range tokens {
-			res = append(res, sql.Token(token))
+			res = append(res, Token(token))
 		}
 	}
 	return res, nil

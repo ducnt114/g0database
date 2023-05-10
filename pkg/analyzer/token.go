@@ -1,4 +1,4 @@
-package sql
+package analyzer
 
 type Token string
 
