@@ -51,32 +51,37 @@ func (l *naiveLexer) Analyze(sqlCmd string) ([]sql.Token, error) {
 }
 
 func (l *naiveLexer) parseToken(c string) []string {
-	if l.isKeyword(c) {
-		return []string{c}
-	}
-	if l.checkRegex(c) {
+	if l.isValidToken(c) {
 		return []string{c}
 	}
 	res := make([]string, 0)
 	var startIndex = 0
-	var endIndex = len(c) - 1
+	var endIndex = len(c)
 	for {
-		if endIndex < startIndex {
+		if startIndex > endIndex {
 			break
 		}
 		newToken := c[startIndex:endIndex]
-		tokens := l.parseToken(newToken)
-		if len(tokens) > 0 {
-			res = append(res, tokens...)
+		if l.isValidToken(newToken) {
+			res = append(res, newToken)
 			startIndex = endIndex
 			endIndex = len(c)
-			continue
 		} else {
 			endIndex--
 		}
 	}
 
 	return res
+}
+
+func (l *naiveLexer) isValidToken(c string) bool {
+	if l.isKeyword(c) {
+		return true
+	}
+	if l.checkRegex(c) {
+		return true
+	}
+	return false
 }
 
 func (l *naiveLexer) isKeyword(c string) bool {
