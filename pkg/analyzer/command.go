@@ -14,12 +14,12 @@ type Command interface {
 	GetType() CommandType
 }
 
-type commandSelect struct {
+type CommandSelect struct {
 	selectFields []string
 	fromTables   []string
 	conditions   []Condition
 }
 
-func (c *commandSelect) GetType() CommandType {
+func (c *CommandSelect) GetType() CommandType {
 	return CommandTypeSelect
 }

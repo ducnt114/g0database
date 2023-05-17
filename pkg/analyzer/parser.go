@@ -34,11 +34,48 @@ func (p *parser) Parse(tokens []Token) (Command, error) {
 	default:
 		return nil, fmt.Errorf("not supported command")
 	}
-
 }
 
+type stateMachineType int
+
+const (
+	selectCommandStateSelect stateMachineType = iota
+	selectCommandStateFrom
+	selectCommandStateWhere
+)
+
 func (p *parser) parseCommandSelect(tokens []Token) (Command, error) {
-	return nil, fmt.Errorf("not implemented yet")
+	res := &CommandSelect{
+		fromTables:   []string{},
+		selectFields: []string{},
+		conditions:   []Condition{},
+	}
+	var state stateMachineType
+	for _, token := range tokens {
+		switch token {
+		case "select":
+			state = selectCommandStateSelect
+			continue
+		case "from":
+			state = selectCommandStateFrom
+			continue
+		case "where":
+			state = selectCommandStateWhere
+			continue
+		}
+		if token == "," {
+			continue
+		}
+		switch state {
+		case selectCommandStateSelect:
+			res.selectFields = append(res.selectFields, string(token))
+		case selectCommandStateFrom:
+			res.fromTables = append(res.fromTables, string(token))
+		case selectCommandStateWhere:
+			// add condition
+		}
+	}
+	return res, nil
 }
 
 func (p *parser) parseCommandUpdate(tokens []Token) (Command, error) {
