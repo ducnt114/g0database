@@ -7,6 +7,7 @@ const (
 	CommandTypeUpdate CommandType = "update"
 	CommandTypeDelete CommandType = "delete"
 	CommandTypeInsert CommandType = "insert"
+	CommandTypeCreate CommandType = "create"
 )
 
 type Command interface {
@@ -19,6 +20,6 @@ type commandSelect struct {
 	conditions   []Condition
 }
 
-func (c *commandSelect) getType() CommandType {
+func (c *commandSelect) GetType() CommandType {
 	return CommandTypeSelect
 }
