@@ -1,5 +1,7 @@
 package analyzer
 
+import "github.com/ducnt114/g0database/pkg/models"
+
 type CommandType string
 
 const (
@@ -22,4 +24,13 @@ type CommandSelect struct {
 
 func (c *CommandSelect) GetType() CommandType {
 	return CommandTypeSelect
+}
+
+type CommandCreate struct {
+	tableName string
+	columns   []*models.Column
+}
+
+func (c *CommandCreate) GetType() CommandType {
+	return CommandTypeCreate
 }
