@@ -3,13 +3,16 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/ducnt114/g0database/pkg/engine"
 	"os"
 	"strings"
 )
 
 func main() {
+	replEngine := engine.NewReplEngine()
 	reader := bufio.NewReader(os.Stdin)
 	finish := false
+	result := ""
 	for {
 		if finish {
 			break
@@ -17,21 +20,25 @@ func main() {
 		printPrompt()
 		text, _ := reader.ReadString('\n')
 		cmd := strings.ToLower(strings.TrimSpace(text))
-		if strings.HasPrefix(cmd, ".") {
-			end, err := doMetaCommand(cmd)
-			if err != nil {
-				fmt.Printf("error when do meta command: %v\n", err)
-			}
-			finish = end
-			continue
-		}
-		stmt, err := prepareStatement(cmd)
-		if err != nil {
-			fmt.Printf("error when prepare statement: %v\n", err)
-			continue
-		}
-		executeStatement(stmt)
-		fmt.Println("executed")
+
+		finish, result = replEngine.Execute(cmd)
+		fmt.Println(result)
+		//
+		//if strings.HasPrefix(cmd, ".") {
+		//	end, err := doMetaCommand(cmd)
+		//	if err != nil {
+		//		fmt.Printf("error when do meta command: %v\n", err)
+		//	}
+		//	finish = end
+		//	continue
+		//}
+		//stmt, err := prepareStatement(cmd)
+		//if err != nil {
+		//	fmt.Printf("error when prepare statement: %v\n", err)
+		//	continue
+		//}
+		//executeStatement(stmt)
+		//fmt.Println("executed")
 	}
 }
 
@@ -47,7 +54,7 @@ func doMetaCommand(cmd string) (finish bool, err error) {
 }
 
 func printPrompt() {
-	fmt.Print("db > ")
+	fmt.Print("g0db > ")
 }
 
 type StatementType string
