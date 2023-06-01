@@ -19,7 +19,7 @@ func NewExecutor() Executor {
 
 func (e *executorImpl) Execute(cmd analyzer.Command) CommandResult {
 	res := CommandResult{
-		Output:      fmt.Sprintf("[executor] execute cmd: %V", cmd.GetType()),
+		Output:      fmt.Sprintf("[executor] execute cmd: %v", cmd.GetType()),
 		IsTerminate: false,
 	}
 	return res
