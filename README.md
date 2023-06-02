@@ -1,6 +1,7 @@
 # g0database
 
 ![Github Actions](https://github.com/ducnt114/g0database/actions/workflows/go.yml/badge.svg)
+[![codecov](https://codecov.io/gh/ducnt114/g0database/branch/develop/graph/badge.svg?token=8OZNUA1UEC)](https://codecov.io/gh/ducnt114/g0database)
 
 A SQL database is written from scratch in Go
 
