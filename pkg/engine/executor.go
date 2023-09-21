@@ -25,7 +25,7 @@ func (e *executorImpl) Execute(cmd analyzer.Command) CommandResult {
 	return res
 }
 
-func (r *executorImpl) isMetaCommand(rawCommand string) bool {
+func (e *executorImpl) isMetaCommand(rawCommand string) bool {
 	switch rawCommand {
 	case "exit":
 		return true
@@ -34,7 +34,7 @@ func (r *executorImpl) isMetaCommand(rawCommand string) bool {
 	}
 }
 
-func (r *executorImpl) executeMetaCommand(rawCommand string) (finish bool, result string) {
+func (e *executorImpl) executeMetaCommand(rawCommand string) (finish bool, result string) {
 	switch rawCommand {
 	case "exit":
 		return true, "bye"
