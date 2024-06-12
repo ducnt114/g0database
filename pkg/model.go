@@ -1,4 +1,4 @@
-package models
+package pkg
 
 type DataType string
 
@@ -14,4 +14,14 @@ type Column struct {
 	Datatype DataType
 	DataSize int
 	Value    interface{}
+}
+
+type Table struct {
+	Name    string
+	Columns []*Column
+}
+
+type Schema struct {
+	Name   string
+	Tables []*Table
 }
