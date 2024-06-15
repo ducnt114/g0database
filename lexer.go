@@ -1,4 +1,4 @@
-package analyzer
+package g0database
 
 import (
 	"regexp"

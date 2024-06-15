@@ -1,4 +1,4 @@
-package pkg
+package g0database
 
 import (
 	"encoding/csv"
