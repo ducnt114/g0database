@@ -15,14 +15,14 @@ type Command interface {
 	GetType() CommandType
 }
 
-// Condition represents a single WHERE condition
+// Condition represents a single WHERE condition (kept for backward compatibility)
 type Condition struct {
 	Column   string
 	Operator string // =, <>, <, >, <=, >=
 	Value    interface{}
 }
 
-// WhereClause represents WHERE conditions
+// WhereClause represents WHERE conditions (kept for backward compatibility)
 type WhereClause struct {
 	Conditions []Condition
 	Logic      string // "AND" or "OR" (default AND)
@@ -38,7 +38,7 @@ type OrderByClause struct {
 type CommandSelect struct {
 	SelectFields []string
 	FromTables   []string
-	Where        *WhereClause
+	Where        Expression // Changed from *WhereClause to Expression
 	OrderBy      []OrderByClause
 	Limit        int // 0 = no limit
 }
@@ -62,7 +62,7 @@ func (c *CommandInsert) GetType() CommandType {
 type CommandUpdate struct {
 	TableName string
 	Updates   map[string]interface{} // column -> new value
-	Where     *WhereClause
+	Where     Expression             // Changed from *WhereClause to Expression
 }
 
 func (c *CommandUpdate) GetType() CommandType {
@@ -72,7 +72,7 @@ func (c *CommandUpdate) GetType() CommandType {
 // CommandDelete represents DELETE statement
 type CommandDelete struct {
 	TableName string
-	Where     *WhereClause
+	Where     Expression // Changed from *WhereClause to Expression
 }
 
 func (c *CommandDelete) GetType() CommandType {

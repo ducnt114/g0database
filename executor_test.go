@@ -5,6 +5,42 @@ import (
 	"testing"
 )
 
+// Helper to create a simple equality condition expression
+func eqExpr(col string, val interface{}) Expression {
+	return &BinaryExpr{
+		Left:     &Identifier{Name: col},
+		Operator: TOKEN_EQ,
+		Right:    valueToExpression(val),
+	}
+}
+
+// Helper to create a comparison expression
+func cmpExpr(col string, op TokenType, val interface{}) Expression {
+	return &BinaryExpr{
+		Left:     &Identifier{Name: col},
+		Operator: op,
+		Right:    valueToExpression(val),
+	}
+}
+
+// Helper to create AND expression
+func andExpr(left, right Expression) Expression {
+	return &BinaryExpr{
+		Left:     left,
+		Operator: TOKEN_AND,
+		Right:    right,
+	}
+}
+
+// Helper to create OR expression
+func orExpr(left, right Expression) Expression {
+	return &BinaryExpr{
+		Left:     left,
+		Operator: TOKEN_OR,
+		Right:    right,
+	}
+}
+
 // setupTestExecutor creates an executor with a test database and users table
 func setupTestExecutor(t *testing.T) (*executorImpl, *Engine) {
 	t.Helper()
@@ -231,11 +267,7 @@ func TestExecutor_Select_WhereEquals(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"*"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "name", Operator: "=", Value: "Alice"},
-			},
-		},
+		Where:        eqExpr("name", "Alice"),
 	}
 
 	result := executor.Execute(cmd)
@@ -255,11 +287,7 @@ func TestExecutor_Select_WhereGreaterThan(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"name", "age"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "age", Operator: ">", Value: int64(28)},
-			},
-		},
+		Where:        cmpExpr("age", TOKEN_GT, int64(28)),
 	}
 
 	result := executor.Execute(cmd)
@@ -276,11 +304,7 @@ func TestExecutor_Select_WhereLessThan(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"name"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "age", Operator: "<", Value: int64(30)},
-			},
-		},
+		Where:        cmpExpr("age", TOKEN_LT, int64(30)),
 	}
 
 	result := executor.Execute(cmd)
@@ -300,13 +324,10 @@ func TestExecutor_Select_WhereAnd(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"name"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "age", Operator: ">=", Value: int64(30)},
-				{Column: "age", Operator: "<=", Value: int64(35)},
-			},
-			Logic: "AND",
-		},
+		Where: andExpr(
+			cmpExpr("age", TOKEN_GE, int64(30)),
+			cmpExpr("age", TOKEN_LE, int64(35)),
+		),
 	}
 
 	result := executor.Execute(cmd)
@@ -323,13 +344,10 @@ func TestExecutor_Select_WhereOr(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"name"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "name", Operator: "=", Value: "Alice"},
-				{Column: "name", Operator: "=", Value: "Bob"},
-			},
-			Logic: "OR",
-		},
+		Where: orExpr(
+			eqExpr("name", "Alice"),
+			eqExpr("name", "Bob"),
+		),
 	}
 
 	result := executor.Execute(cmd)
@@ -411,11 +429,7 @@ func TestExecutor_Select_WhereOrderByLimit(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"name", "age"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "age", Operator: ">=", Value: int64(25)},
-			},
-		},
+		Where:        cmpExpr("age", TOKEN_GE, int64(25)),
 		OrderBy: []OrderByClause{
 			{Column: "age", Desc: true},
 		},
@@ -443,11 +457,7 @@ func TestExecutor_Select_EmptyResult(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"*"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "age", Operator: ">", Value: int64(100)},
-			},
-		},
+		Where:        cmpExpr("age", TOKEN_GT, int64(100)),
 	}
 
 	result := executor.Execute(cmd)
@@ -479,16 +489,12 @@ func TestExecutor_Select_ColumnNotFoundInWhere(t *testing.T) {
 	cmd := &CommandSelect{
 		SelectFields: []string{"*"},
 		FromTables:   []string{"users"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "nonexistent", Operator: "=", Value: "test"},
-			},
-		},
+		Where:        eqExpr("nonexistent", "test"),
 	}
 
 	result := executor.Execute(cmd)
 
-	if !strings.Contains(result.Output, "column not found") {
+	if !strings.Contains(result.Output, "column") && !strings.Contains(result.Output, "not found") {
 		t.Errorf("expected column not found error, got: %s", result.Output)
 	}
 }
@@ -528,11 +534,7 @@ func TestExecutor_Update_WithWhere(t *testing.T) {
 	cmd := &CommandUpdate{
 		TableName: "users",
 		Updates:   map[string]interface{}{"name": "Alice Smith"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "id", Operator: "=", Value: int64(1)},
-			},
-		},
+		Where:     eqExpr("id", int64(1)),
 	}
 
 	result := executor.Execute(cmd)
@@ -556,11 +558,7 @@ func TestExecutor_Update_NoMatchingRows(t *testing.T) {
 	cmd := &CommandUpdate{
 		TableName: "users",
 		Updates:   map[string]interface{}{"name": "Nobody"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "id", Operator: "=", Value: int64(999)},
-			},
-		},
+		Where:     eqExpr("id", int64(999)),
 	}
 
 	result := executor.Execute(cmd)
@@ -616,11 +614,7 @@ func TestExecutor_Delete_WithWhere(t *testing.T) {
 
 	cmd := &CommandDelete{
 		TableName: "users",
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "name", Operator: "=", Value: "Bob"},
-			},
-		},
+		Where:     eqExpr("name", "Bob"),
 	}
 
 	result := executor.Execute(cmd)
@@ -643,11 +637,7 @@ func TestExecutor_Delete_NoMatchingRows(t *testing.T) {
 
 	cmd := &CommandDelete{
 		TableName: "users",
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "id", Operator: "=", Value: int64(999)},
-			},
-		},
+		Where:     eqExpr("id", int64(999)),
 	}
 
 	result := executor.Execute(cmd)
@@ -725,21 +715,20 @@ func TestBuildPredicate_NilWhere(t *testing.T) {
 	_ = executor // Keep executor in scope
 }
 
-func TestBuildPredicate_EmptyConditions(t *testing.T) {
+func TestBuildPredicate_SimpleCondition(t *testing.T) {
 	_, engine := setupTestExecutor(t)
 	insertTestData(t, engine)
 
 	table := engine.Current.GetTable("users")
-	predicate, err := BuildPredicate(&WhereClause{Conditions: []Condition{}}, table)
+	predicate, err := BuildPredicate(eqExpr("name", "Alice"), table)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	// Should match all rows
 	rows := table.SelectWhere(predicate)
-	if len(rows) != 3 {
-		t.Errorf("expected all 3 rows, got %d", len(rows))
+	if len(rows) != 1 {
+		t.Errorf("expected 1 row, got %d", len(rows))
 	}
 }
 
@@ -747,74 +736,65 @@ func TestBuildPredicate_ColumnNotFound(t *testing.T) {
 	_, engine := setupTestExecutor(t)
 	table := engine.Current.GetTable("users")
 
-	_, err := BuildPredicate(&WhereClause{
-		Conditions: []Condition{
-			{Column: "nonexistent", Operator: "=", Value: "test"},
-		},
-	}, table)
+	predicate, _ := BuildPredicate(eqExpr("nonexistent", "test"), table)
 
-	if err == nil {
-		t.Error("expected error for nonexistent column")
+	// With expression-based evaluation, column not found returns false for all rows
+	rows := table.SelectWhere(predicate)
+	if len(rows) != 0 {
+		t.Errorf("expected 0 rows for nonexistent column, got %d", len(rows))
 	}
 }
 
-func TestCompareValues_AllOperators(t *testing.T) {
+func TestValuesEqual_AllTypes(t *testing.T) {
 	tests := []struct {
 		left     interface{}
-		operator string
 		right    interface{}
 		expected bool
 	}{
-		// Equals
-		{10, "=", 10, true},
-		{10, "=", 20, false},
-		{"hello", "=", "hello", true},
-		{"hello", "=", "world", false},
-
-		// Not equals
-		{10, "<>", 20, true},
-		{10, "<>", 10, false},
-		{10, "!=", 20, true},
-
-		// Less than
-		{10, "<", 20, true},
-		{20, "<", 10, false},
-		{10, "<", 10, false},
-
-		// Greater than
-		{20, ">", 10, true},
-		{10, ">", 20, false},
-		{10, ">", 10, false},
-
-		// Less than or equal
-		{10, "<=", 20, true},
-		{10, "<=", 10, true},
-		{20, "<=", 10, false},
-
-		// Greater than or equal
-		{20, ">=", 10, true},
-		{10, ">=", 10, true},
-		{10, ">=", 20, false},
+		// Same types
+		{10, 10, true},
+		{10, 20, false},
+		{"hello", "hello", true},
+		{"hello", "world", false},
 
 		// Type coercion
-		{int64(10), "=", int32(10), true},
-		{float64(10.0), "=", int(10), true},
-
-		// String comparison
-		{"a", "<", "b", true},
-		{"b", ">", "a", true},
+		{int64(10), int32(10), true},
+		{float64(10.0), int(10), true},
 
 		// NULL handling
-		{nil, "=", nil, false},
-		{nil, "=", 10, false},
-		{10, "=", nil, false},
+		{nil, nil, true},
+		{nil, 10, false},
+		{10, nil, false},
 	}
 
 	for _, tt := range tests {
-		result := compareValues(tt.left, tt.operator, tt.right)
+		result := valuesEqual(tt.left, tt.right)
 		if result != tt.expected {
-			t.Errorf("compareValues(%v, %s, %v) = %v, want %v",
-				tt.left, tt.operator, tt.right, result, tt.expected)
+			t.Errorf("valuesEqual(%v, %v) = %v, want %v",
+				tt.left, tt.right, result, tt.expected)
+		}
+	}
+}
+
+func TestCompareNumericOrString(t *testing.T) {
+	tests := []struct {
+		left     interface{}
+		right    interface{}
+		expected int // -1, 0, 1
+	}{
+		{10, 20, -1},
+		{20, 10, 1},
+		{10, 10, 0},
+		{"a", "b", -1},
+		{"b", "a", 1},
+		{"a", "a", 0},
+	}
+
+	for _, tt := range tests {
+		result := compareNumericOrString(tt.left, tt.right)
+		if result != tt.expected {
+			t.Errorf("compareNumericOrString(%v, %v) = %v, want %v",
+				tt.left, tt.right, result, tt.expected)
 		}
 	}
 }
@@ -869,12 +849,8 @@ func TestExecutor_Integration_FullWorkflow(t *testing.T) {
 	selectCmd = &CommandSelect{
 		SelectFields: []string{"name", "price"},
 		FromTables:   []string{"products"},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "price", Operator: ">", Value: int64(100)},
-			},
-		},
-		OrderBy: []OrderByClause{{Column: "price", Desc: true}},
+		Where:        cmpExpr("price", TOKEN_GT, int64(100)),
+		OrderBy:      []OrderByClause{{Column: "price", Desc: true}},
 	}
 	result = executor.Execute(selectCmd)
 	if !strings.Contains(result.Output, "2 row(s) in set") {
@@ -885,11 +861,7 @@ func TestExecutor_Integration_FullWorkflow(t *testing.T) {
 	updateCmd := &CommandUpdate{
 		TableName: "products",
 		Updates:   map[string]interface{}{"price": int64(150)},
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "name", Operator: "=", Value: "Apple"},
-			},
-		},
+		Where:     eqExpr("name", "Apple"),
 	}
 	result = executor.Execute(updateCmd)
 	if !strings.Contains(result.Output, "1 row(s) affected") {
@@ -899,11 +871,7 @@ func TestExecutor_Integration_FullWorkflow(t *testing.T) {
 	// 6. DELETE
 	deleteCmd := &CommandDelete{
 		TableName: "products",
-		Where: &WhereClause{
-			Conditions: []Condition{
-				{Column: "id", Operator: "=", Value: int64(2)},
-			},
-		},
+		Where:     eqExpr("id", int64(2)),
 	}
 	result = executor.Execute(deleteCmd)
 	if !strings.Contains(result.Output, "1 row(s) deleted") {

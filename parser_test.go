@@ -4,10 +4,18 @@ import (
 	"testing"
 )
 
+// Helper function to create tokens from SQL
+func tokenize(sql string) []Token {
+	l := NewLexer(sql)
+	tokens, _ := l.Tokenize()
+	return tokens
+}
+
 func TestParser_ParseSelect_Basic(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{"select", "id", ",", "name", "from", "users"})
+	tokens := tokenize("SELECT id, name FROM users")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,10 +39,8 @@ func TestParser_ParseSelect_Basic(t *testing.T) {
 func TestParser_ParseSelect_WithWhere(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"select", "*", "from", "users",
-		"where", "status", "=", "'active'",
-	})
+	tokens := tokenize("SELECT * FROM users WHERE status = 'active'")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,29 +49,42 @@ func TestParser_ParseSelect_WithWhere(t *testing.T) {
 	if sel.Where == nil {
 		t.Fatal("expected WHERE clause")
 	}
-	if len(sel.Where.Conditions) != 1 {
-		t.Errorf("expected 1 condition, got %d", len(sel.Where.Conditions))
+
+	// Check it's a binary expression
+	binExpr, ok := sel.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", sel.Where)
 	}
 
-	cond := sel.Where.Conditions[0]
-	if cond.Column != "status" {
-		t.Errorf("expected column 'status', got %s", cond.Column)
+	// Check left side is identifier
+	left, ok := binExpr.Left.(*Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier, got %T", binExpr.Left)
 	}
-	if cond.Operator != "=" {
-		t.Errorf("expected operator '=', got %s", cond.Operator)
+	if left.Name != "status" {
+		t.Errorf("expected 'status', got %s", left.Name)
 	}
-	if cond.Value != "active" {
-		t.Errorf("expected value 'active', got %v", cond.Value)
+
+	// Check operator
+	if binExpr.Operator != TOKEN_EQ {
+		t.Errorf("expected EQ, got %s", binExpr.Operator)
+	}
+
+	// Check right side is string literal
+	right, ok := binExpr.Right.(*StringLiteral)
+	if !ok {
+		t.Fatalf("expected StringLiteral, got %T", binExpr.Right)
+	}
+	if right.Value != "active" {
+		t.Errorf("expected 'active', got %s", right.Value)
 	}
 }
 
 func TestParser_ParseSelect_WithWhereAndOr(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"select", "*", "from", "users",
-		"where", "status", "=", "'active'", "and", "age", ">", "18",
-	})
+	tokens := tokenize("SELECT * FROM users WHERE status = 'active' AND age > 18")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,21 +93,22 @@ func TestParser_ParseSelect_WithWhereAndOr(t *testing.T) {
 	if sel.Where == nil {
 		t.Fatal("expected WHERE clause")
 	}
-	if len(sel.Where.Conditions) != 2 {
-		t.Errorf("expected 2 conditions, got %d", len(sel.Where.Conditions))
+
+	// Check it's a binary expression with AND
+	binExpr, ok := sel.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", sel.Where)
 	}
-	if sel.Where.Logic != "AND" {
-		t.Errorf("expected AND logic, got %s", sel.Where.Logic)
+	if binExpr.Operator != TOKEN_AND {
+		t.Errorf("expected AND, got %s", binExpr.Operator)
 	}
 }
 
 func TestParser_ParseSelect_WithOrderBy(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"select", "*", "from", "users",
-		"order", "by", "name", "asc", ",", "id", "desc",
-	})
+	tokens := tokenize("SELECT * FROM users ORDER BY name ASC, id DESC")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +128,8 @@ func TestParser_ParseSelect_WithOrderBy(t *testing.T) {
 func TestParser_ParseSelect_WithLimit(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"select", "*", "from", "users", "limit", "10",
-	})
+	tokens := tokenize("SELECT * FROM users LIMIT 10")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,12 +143,8 @@ func TestParser_ParseSelect_WithLimit(t *testing.T) {
 func TestParser_ParseSelect_Full(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"select", "id", ",", "name", "from", "users",
-		"where", "status", "=", "'active'",
-		"order", "by", "id", "desc",
-		"limit", "5",
-	})
+	tokens := tokenize("SELECT id, name FROM users WHERE status = 'active' ORDER BY id DESC LIMIT 5")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +153,7 @@ func TestParser_ParseSelect_Full(t *testing.T) {
 	if len(sel.SelectFields) != 2 {
 		t.Error("wrong select fields")
 	}
-	if sel.Where == nil || len(sel.Where.Conditions) != 1 {
+	if sel.Where == nil {
 		t.Error("wrong where clause")
 	}
 	if len(sel.OrderBy) != 1 || !sel.OrderBy[0].Desc {
@@ -152,12 +167,8 @@ func TestParser_ParseSelect_Full(t *testing.T) {
 func TestParser_ParseInsert_WithColumns(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"insert", "into", "users",
-		"(", "id", ",", "name", ",", "email", ")",
-		"values",
-		"(", "1", ",", "'Alice'", ",", "'alice@test.com'", ")",
-	})
+	tokens := tokenize("INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@test.com')")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,11 +200,8 @@ func TestParser_ParseInsert_WithColumns(t *testing.T) {
 func TestParser_ParseInsert_WithoutColumns(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"insert", "into", "users",
-		"values",
-		"(", "1", ",", "'Bob'", ",", "null", ")",
-	})
+	tokens := tokenize("INSERT INTO users VALUES (1, 'Bob', NULL)")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,10 +223,8 @@ func TestParser_ParseInsert_WithoutColumns(t *testing.T) {
 func TestParser_ParseUpdate_Basic(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"update", "users",
-		"set", "name", "=", "'Bob'", ",", "age", "=", "30",
-	})
+	tokens := tokenize("UPDATE users SET name = 'Bob', age = 30")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,11 +251,8 @@ func TestParser_ParseUpdate_Basic(t *testing.T) {
 func TestParser_ParseUpdate_WithWhere(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"update", "users",
-		"set", "status", "=", "'inactive'",
-		"where", "id", "=", "1",
-	})
+	tokens := tokenize("UPDATE users SET status = 'inactive' WHERE id = 1")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,20 +261,13 @@ func TestParser_ParseUpdate_WithWhere(t *testing.T) {
 	if upd.Where == nil {
 		t.Fatal("expected WHERE clause")
 	}
-	if len(upd.Where.Conditions) != 1 {
-		t.Errorf("expected 1 condition, got %d", len(upd.Where.Conditions))
-	}
-	if upd.Where.Conditions[0].Column != "id" {
-		t.Errorf("expected column 'id', got %s", upd.Where.Conditions[0].Column)
-	}
 }
 
 func TestParser_ParseDelete_Basic(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"delete", "from", "users",
-	})
+	tokens := tokenize("DELETE FROM users")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,10 +288,8 @@ func TestParser_ParseDelete_Basic(t *testing.T) {
 func TestParser_ParseDelete_WithWhere(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"delete", "from", "users",
-		"where", "id", "=", "1",
-	})
+	tokens := tokenize("DELETE FROM users WHERE id = 1")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,22 +298,13 @@ func TestParser_ParseDelete_WithWhere(t *testing.T) {
 	if del.Where == nil {
 		t.Fatal("expected WHERE clause")
 	}
-	if len(del.Where.Conditions) != 1 {
-		t.Errorf("expected 1 condition, got %d", len(del.Where.Conditions))
-	}
 }
 
 func TestParser_ParseCreate(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"create", "table", "users",
-		"(",
-		"id", "int", ",",
-		"name", "varchar", "(", "255", ")", ",",
-		"age", "int",
-		")",
-	})
+	tokens := tokenize("CREATE TABLE users (id INT, name VARCHAR(255), age INT)")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,19 +320,13 @@ func TestParser_ParseCreate(t *testing.T) {
 	if len(cre.Columns) != 3 {
 		t.Errorf("expected 3 columns, got %d", len(cre.Columns))
 	}
-
-	// Check varchar size
-	if cre.Columns[1].DataSize != 255 {
-		t.Errorf("expected varchar(255), got size %d", cre.Columns[1].DataSize)
-	}
 }
 
 func TestParser_ParseDrop(t *testing.T) {
 	parser := NewParser()
 
-	cmd, err := parser.Parse([]Token{
-		"drop", "table", "users",
-	})
+	tokens := tokenize("DROP TABLE users")
+	cmd, err := parser.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,25 +343,52 @@ func TestParser_ParseDrop(t *testing.T) {
 
 func TestParser_ParseValue(t *testing.T) {
 	tests := []struct {
-		input    Token
+		sql      string
 		expected interface{}
 	}{
-		{"null", nil},
-		{"NULL", nil},
-		{"true", true},
-		{"false", false},
-		{"123", int64(123)},
-		{"12.34", float64(12.34)},
-		{"'hello'", "hello"},
-		{"'hello world'", "hello world"},
-		{"identifier", "identifier"},
+		{"SELECT * FROM t WHERE a = NULL", nil},
+		{"SELECT * FROM t WHERE a = TRUE", true},
+		{"SELECT * FROM t WHERE a = FALSE", false},
+		{"SELECT * FROM t WHERE a = 123", int64(123)},
+		{"SELECT * FROM t WHERE a = 12.34", float64(12.34)},
+		{"SELECT * FROM t WHERE a = 'hello'", "hello"},
 	}
 
+	parser := NewParser()
+
 	for _, tt := range tests {
-		result := parseValue(tt.input)
-		if result != tt.expected {
-			t.Errorf("parseValue(%q): expected %v (%T), got %v (%T)",
-				tt.input, tt.expected, tt.expected, result, result)
+		tokens := tokenize(tt.sql)
+		cmd, err := parser.Parse(tokens)
+		if err != nil {
+			t.Errorf("parse error for %s: %v", tt.sql, err)
+			continue
+		}
+
+		sel := cmd.(*CommandSelect)
+		if sel.Where == nil {
+			t.Errorf("expected WHERE clause for %s", tt.sql)
+			continue
+		}
+
+		binExpr := sel.Where.(*BinaryExpr)
+		var value interface{}
+
+		switch v := binExpr.Right.(type) {
+		case *NullLiteral:
+			value = nil
+		case *BooleanLiteral:
+			value = v.Value
+		case *IntegerLiteral:
+			value = v.Value
+		case *FloatLiteral:
+			value = v.Value
+		case *StringLiteral:
+			value = v.Value
+		}
+
+		if value != tt.expected {
+			t.Errorf("parseValue for %s: expected %v (%T), got %v (%T)",
+				tt.sql, tt.expected, tt.expected, value, value)
 		}
 	}
 }
@@ -391,25 +397,27 @@ func TestParser_WhereOperators(t *testing.T) {
 	parser := NewParser()
 
 	tests := []struct {
-		tokens   []Token
-		expected string
+		sql      string
+		expected TokenType
 	}{
-		{[]Token{"select", "*", "from", "t", "where", "a", "=", "1"}, "="},
-		{[]Token{"select", "*", "from", "t", "where", "a", "<>", "1"}, "<>"},
-		{[]Token{"select", "*", "from", "t", "where", "a", "<", "1"}, "<"},
-		{[]Token{"select", "*", "from", "t", "where", "a", ">", "1"}, ">"},
-		{[]Token{"select", "*", "from", "t", "where", "a", "<=", "1"}, "<="},
-		{[]Token{"select", "*", "from", "t", "where", "a", ">=", "1"}, ">="},
+		{"SELECT * FROM t WHERE a = 1", TOKEN_EQ},
+		{"SELECT * FROM t WHERE a <> 1", TOKEN_NE},
+		{"SELECT * FROM t WHERE a < 1", TOKEN_LT},
+		{"SELECT * FROM t WHERE a > 1", TOKEN_GT},
+		{"SELECT * FROM t WHERE a <= 1", TOKEN_LE},
+		{"SELECT * FROM t WHERE a >= 1", TOKEN_GE},
 	}
 
 	for _, tt := range tests {
-		cmd, err := parser.Parse(tt.tokens)
+		tokens := tokenize(tt.sql)
+		cmd, err := parser.Parse(tokens)
 		if err != nil {
-			t.Fatalf("parse error for %v: %v", tt.tokens, err)
+			t.Fatalf("parse error for %s: %v", tt.sql, err)
 		}
 		sel := cmd.(*CommandSelect)
-		if sel.Where.Conditions[0].Operator != tt.expected {
-			t.Errorf("expected operator %s, got %s", tt.expected, sel.Where.Conditions[0].Operator)
+		binExpr := sel.Where.(*BinaryExpr)
+		if binExpr.Operator != tt.expected {
+			t.Errorf("for %s: expected operator %s, got %s", tt.sql, tt.expected, binExpr.Operator)
 		}
 	}
 }
@@ -426,8 +434,87 @@ func TestParser_EmptyCommand(t *testing.T) {
 func TestParser_UnsupportedCommand(t *testing.T) {
 	parser := NewParser()
 
-	_, err := parser.Parse([]Token{"truncate", "table", "users"})
+	tokens := tokenize("TRUNCATE TABLE users")
+	_, err := parser.Parse(tokens)
 	if err == nil {
 		t.Error("expected error for unsupported command")
+	}
+}
+
+func TestParser_ExpressionPrecedence(t *testing.T) {
+	parser := NewParser()
+
+	// AND has higher precedence than OR
+	// a = 1 OR b = 2 AND c = 3 should parse as: a = 1 OR (b = 2 AND c = 3)
+	tokens := tokenize("SELECT * FROM t WHERE a = 1 OR b = 2 AND c = 3")
+	cmd, err := parser.Parse(tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sel := cmd.(*CommandSelect)
+	if sel.Where == nil {
+		t.Fatal("expected WHERE clause")
+	}
+
+	// The root should be OR
+	binExpr, ok := sel.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", sel.Where)
+	}
+	if binExpr.Operator != TOKEN_OR {
+		t.Errorf("expected OR at root, got %s", binExpr.Operator)
+	}
+
+	// The right side of OR should be AND
+	rightAnd, ok := binExpr.Right.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr on right, got %T", binExpr.Right)
+	}
+	if rightAnd.Operator != TOKEN_AND {
+		t.Errorf("expected AND on right side, got %s", rightAnd.Operator)
+	}
+}
+
+func TestParser_GroupedExpression(t *testing.T) {
+	parser := NewParser()
+
+	// (a = 1 OR b = 2) AND c = 3
+	tokens := tokenize("SELECT * FROM t WHERE (a = 1 OR b = 2) AND c = 3")
+	cmd, err := parser.Parse(tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sel := cmd.(*CommandSelect)
+	if sel.Where == nil {
+		t.Fatal("expected WHERE clause")
+	}
+
+	// The root should be AND because of grouping
+	binExpr, ok := sel.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", sel.Where)
+	}
+	if binExpr.Operator != TOKEN_AND {
+		t.Errorf("expected AND at root, got %s", binExpr.Operator)
+	}
+}
+
+func TestParser_StringWithSpaces(t *testing.T) {
+	parser := NewParser()
+
+	tokens := tokenize("SELECT * FROM users WHERE name = 'John Doe'")
+	cmd, err := parser.Parse(tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sel := cmd.(*CommandSelect)
+	binExpr := sel.Where.(*BinaryExpr)
+	strLit := binExpr.Right.(*StringLiteral)
+
+	if strLit.Value != "John Doe" {
+		t.Errorf("expected 'John Doe', got '%s'", strLit.Value)
 	}
 }

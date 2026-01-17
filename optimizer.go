@@ -1,1 +1,0 @@
-package g0database
