@@ -70,27 +70,27 @@ func (e *executorImpl) executeCreate(cmd *CommandCreate) CommandResult {
 
 	err := e.engine.Current.CreateTable(tableDef)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
-	return CommandResult{Output: "Query OK, table created"}
+	return CommandResult{Output: "Query OK, table created", Type: ResultTypeOK}
 }
 
 // executeDrop handles DROP TABLE statements
 func (e *executorImpl) executeDrop(cmd *CommandDrop) CommandResult {
 	err := e.engine.Current.DropTable(cmd.TableName)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
-	return CommandResult{Output: "Query OK, table dropped"}
+	return CommandResult{Output: "Query OK, table dropped", Type: ResultTypeOK}
 }
 
 // executeInsert handles INSERT statements
 func (e *executorImpl) executeInsert(cmd *CommandInsert) CommandResult {
 	table := e.engine.Current.GetTable(cmd.TableName)
 	if table == nil {
-		return CommandResult{Output: ErrTableNotFound.Error() + ": " + cmd.TableName}
+		return CommandResult{Output: ErrTableNotFound.Error() + ": " + cmd.TableName, Type: ResultTypeError}
 	}
 
 	var err error
@@ -109,29 +109,29 @@ func (e *executorImpl) executeInsert(cmd *CommandInsert) CommandResult {
 	}
 
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
-	return CommandResult{Output: "Query OK, 1 row affected"}
+	return CommandResult{Output: "Query OK, 1 row affected", Type: ResultTypeOK, AffectedRows: 1}
 }
 
 // executeSelect handles SELECT statements
 func (e *executorImpl) executeSelect(cmd *CommandSelect) CommandResult {
 	// Get table (support single table for now)
 	if len(cmd.FromTables) == 0 {
-		return CommandResult{Output: "no table specified"}
+		return CommandResult{Output: "no table specified", Type: ResultTypeError}
 	}
 
 	tableName := cmd.FromTables[0]
 	table := e.engine.Current.GetTable(tableName)
 	if table == nil {
-		return CommandResult{Output: ErrTableNotFound.Error() + ": " + tableName}
+		return CommandResult{Output: ErrTableNotFound.Error() + ": " + tableName, Type: ResultTypeError}
 	}
 
 	// Build predicate from WHERE clause
 	predicate, err := BuildPredicate(cmd.Where, table)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
 	// Select rows matching predicate
@@ -157,33 +157,74 @@ func (e *executorImpl) executeSelect(cmd *CommandSelect) CommandResult {
 		}
 	}
 
-	// Format result
+	// Get column indices
+	colIndices := make([]int, len(selectedCols))
+	for i, col := range selectedCols {
+		colIndices[i] = table.GetColumnIndex(col)
+	}
+
+	// Build column metadata for protocol
+	resultColumns := make([]ResultColumn, len(selectedCols))
+	for i, colName := range selectedCols {
+		colIdx := colIndices[i]
+		if colIdx >= 0 && colIdx < len(table.Def.Columns) {
+			colDef := table.Def.Columns[colIdx]
+			resultColumns[i] = ResultColumn{
+				Name: colName,
+				Type: colDef.Type,
+				Size: colDef.Size,
+			}
+		} else {
+			resultColumns[i] = ResultColumn{Name: colName, Type: DataTypeVarchar, Size: 255}
+		}
+	}
+
+	// Build row data for protocol
+	resultRows := make([]ResultRow, len(rows))
+	for i, row := range rows {
+		values := make([]interface{}, len(selectedCols))
+		for j, colIdx := range colIndices {
+			if colIdx >= 0 && colIdx < len(row.Values) {
+				values[j] = row.Values[colIdx]
+			}
+		}
+		resultRows[i] = ResultRow{Values: values}
+	}
+
+	// Format result for text output
 	output := formatSelectResult(rows, selectedCols, table)
 
-	return CommandResult{Output: output}
+	return CommandResult{
+		Output:  output,
+		Type:    ResultTypeSelect,
+		Columns: resultColumns,
+		Rows:    resultRows,
+	}
 }
 
 // executeUpdate handles UPDATE statements
 func (e *executorImpl) executeUpdate(cmd *CommandUpdate) CommandResult {
 	table := e.engine.Current.GetTable(cmd.TableName)
 	if table == nil {
-		return CommandResult{Output: ErrTableNotFound.Error() + ": " + cmd.TableName}
+		return CommandResult{Output: ErrTableNotFound.Error() + ": " + cmd.TableName, Type: ResultTypeError}
 	}
 
 	// Build predicate
 	predicate, err := BuildPredicate(cmd.Where, table)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
 	// Execute update
 	count, err := table.UpdateWhere(predicate, cmd.Updates)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
 	return CommandResult{
-		Output: fmt.Sprintf("Query OK, %d row(s) affected", count),
+		Output:       fmt.Sprintf("Query OK, %d row(s) affected", count),
+		Type:         ResultTypeOK,
+		AffectedRows: int64(count),
 	}
 }
 
@@ -191,23 +232,25 @@ func (e *executorImpl) executeUpdate(cmd *CommandUpdate) CommandResult {
 func (e *executorImpl) executeDelete(cmd *CommandDelete) CommandResult {
 	table := e.engine.Current.GetTable(cmd.TableName)
 	if table == nil {
-		return CommandResult{Output: ErrTableNotFound.Error() + ": " + cmd.TableName}
+		return CommandResult{Output: ErrTableNotFound.Error() + ": " + cmd.TableName, Type: ResultTypeError}
 	}
 
 	// Build predicate
 	predicate, err := BuildPredicate(cmd.Where, table)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
 	// Execute delete
 	count, err := table.DeleteWhere(predicate)
 	if err != nil {
-		return CommandResult{Output: err.Error()}
+		return CommandResult{Output: err.Error(), Type: ResultTypeError}
 	}
 
 	return CommandResult{
-		Output: fmt.Sprintf("Query OK, %d row(s) deleted", count),
+		Output:       fmt.Sprintf("Query OK, %d row(s) deleted", count),
+		Type:         ResultTypeOK,
+		AffectedRows: int64(count),
 	}
 }
 

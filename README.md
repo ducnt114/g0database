@@ -3,7 +3,7 @@
 ![Github Actions](https://github.com/ducnt114/g0database/actions/workflows/go.yml/badge.svg)
 [![codecov](https://codecov.io/gh/ducnt114/g0database/branch/develop/graph/badge.svg?token=8OZNUA1UEC)](https://codecov.io/gh/ducnt114/g0database)
 
-A SQL database, written from scratch in Go
+A MySQL-like database, written from scratch in Go
 
 ## Inspired by
 
@@ -12,31 +12,6 @@ A SQL database, written from scratch in Go
 - [How query engines work](https://howqueryengineswork.com/)
 - [dolthub/go-mysql-server](https://github.com/dolthub/go-mysql-server)
 
-## Lexer
+## Documentation
 
-- Split raw sql command to token
-
-raw sql: `select id, name, age from user where status = 'ACTIVE' and id > 10`
-
-=> tokens: `["select", "id", ",", "name", ",", "age", "from", "user", "where", "status", "=", "'", "ACTIVE", "'", "and", "id", ">", "10"]`
-
-## Parser
-
-- Make Abstract syntax tree (AST) from list tokens
-
-```text
-root
- |- select
- |---- fields (id, name, age)
- |- from
- |---- tables (user)
- |- where
- |---- conditions
-           |---- status
-           |---- =
-           |---- ACTIVE
-       |- AND
-           |---- id
-           |---- >
-           |---- 10
-```
+See more in [docs](./docs/)

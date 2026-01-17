@@ -98,8 +98,35 @@ func (c *CommandDrop) GetType() CommandType {
 	return CommandTypeDrop
 }
 
+// ResultType indicates the type of query result
+type ResultType int
+
+const (
+	ResultTypeOK     ResultType = iota // INSERT, UPDATE, DELETE, CREATE, DROP
+	ResultTypeSelect                   // SELECT with result set
+	ResultTypeError                    // Error occurred
+)
+
+// ResultColumn holds metadata for a column in the result set
+type ResultColumn struct {
+	Name string
+	Type DataType
+	Size int
+}
+
+// ResultRow holds a row of data in the result set
+type ResultRow struct {
+	Values []interface{}
+}
+
 // CommandResult holds execution result (used by executor)
 type CommandResult struct {
 	Output      string
 	IsTerminate bool
+
+	// Fields for MySQL protocol support
+	Type         ResultType
+	AffectedRows int64
+	Columns      []ResultColumn
+	Rows         []ResultRow
 }
