@@ -2,7 +2,6 @@ package g0database
 
 import (
 	"encoding/csv"
-	"fmt"
 	"os"
 )
 
@@ -13,8 +12,7 @@ const (
 )
 
 type DataSource interface {
-	Schema() (*Schema, error)
-	FromFile(filePath string) error
+	LoadIntoTable(table *Table, filePath string) error
 }
 
 func NewDataSource(sourceType DataSourceType) DataSource {
@@ -26,15 +24,11 @@ func NewDataSource(sourceType DataSourceType) DataSource {
 	}
 }
 
-type csvDataSource struct {
-	schema *Schema
-}
+type csvDataSource struct{}
 
-func (d *csvDataSource) Schema() (*Schema, error) {
-	return d.schema, nil
-}
-
-func (d *csvDataSource) FromFile(filePath string) error {
+// LoadIntoTable loads CSV data into an existing table
+// First row is treated as header and skipped
+func (d *csvDataSource) LoadIntoTable(table *Table, filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -42,13 +36,23 @@ func (d *csvDataSource) FromFile(filePath string) error {
 	defer func() {
 		_ = file.Close()
 	}()
+
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
 		return err
 	}
-	for _, eachRecord := range records {
-		fmt.Println(eachRecord)
+
+	// Skip header row, insert data rows
+	for i := 1; i < len(records); i++ {
+		values := make([]interface{}, len(records[i]))
+		for j, v := range records[i] {
+			values[j] = v
+		}
+		if err := table.Insert(values); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
