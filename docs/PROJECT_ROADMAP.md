@@ -261,14 +261,15 @@ type Database struct {
 - [x] Primary key uniqueness (via table scan)
 - [x] Unit tests (28 tests passing)
 
-### Phase 2: Parser Completion
-- [ ] INSERT parsing
-- [ ] UPDATE parsing
-- [ ] DELETE parsing
-- [ ] WHERE clause parsing
-- [ ] Expression parsing
-- [ ] ORDER BY / LIMIT
-- [ ] Unit tests
+### Phase 2: Parser Completion ✅ COMPLETE
+- [x] INSERT parsing
+- [x] UPDATE parsing
+- [x] DELETE parsing
+- [x] WHERE clause parsing (with AND/OR)
+- [x] Value parsing (NULL, bool, int, float, string)
+- [x] ORDER BY / LIMIT
+- [x] DROP TABLE parsing
+- [x] Unit tests (18 parser tests)
 
 ### Phase 3: Executor
 - [ ] SELECT execution
