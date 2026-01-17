@@ -38,9 +38,9 @@ type Row struct {
 }
 
 type Table struct {
-    Def     *TableDef
-    Rows    []*Row
-    PkIndex map[interface{}]int  // PK value -> row index (for fast lookup)
+    Def   *TableDef
+    Rows  []*Row
+    pkCol int  // Primary key column index (-1 if none)
 }
 
 type Database struct {
@@ -58,7 +58,7 @@ type Engine struct {
 ### Why This Design?
 
 1. **Slice for rows**: Simple, cache-friendly for sequential scans
-2. **Map for PK index**: O(1) lookup by primary key
+2. **No indexes**: Simple table scans for all lookups (prioritize simplicity over performance)
 3. **Values as `[]interface{}`**: Flexible, matches Go's type system
 4. **Separate TableDef**: Clean separation between schema and data
 

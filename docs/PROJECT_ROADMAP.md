@@ -227,10 +227,9 @@ type Row struct {
 }
 
 type Table struct {
-    Name    string
-    Columns []ColumnDef
-    Rows    []Row
-    Indexes map[string]*Index
+    Def   *TableDef
+    Rows  []*Row
+    pkCol int  // Primary key column index
 }
 
 type Database struct {
@@ -238,6 +237,8 @@ type Database struct {
     Tables map[string]*Table
 }
 ```
+
+**Note**: No indexes - all lookups use simple table scans for simplicity.
 
 ---
 
@@ -254,10 +255,10 @@ type Database struct {
 ### Phase 1: Storage Engine ✅ COMPLETE
 - [x] Table structure design
 - [x] Row insert operation
-- [x] Row select operation
+- [x] Row select operation (table scan)
 - [x] Row update operation
 - [x] Row delete operation
-- [x] Primary key index
+- [x] Primary key uniqueness (via table scan)
 - [x] Unit tests (28 tests passing)
 
 ### Phase 2: Parser Completion

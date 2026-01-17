@@ -456,7 +456,7 @@ func TestConvertValue_Boolean(t *testing.T) {
 	}
 }
 
-func TestTable_PKIndex_AfterDelete(t *testing.T) {
+func TestTable_SelectByPK_AfterDelete(t *testing.T) {
 	table := createTestTable(t)
 	table.Insert([]interface{}{1, "Alice", "alice@test.com"})
 	table.Insert([]interface{}{2, "Bob", "bob@test.com"})
@@ -465,7 +465,7 @@ func TestTable_PKIndex_AfterDelete(t *testing.T) {
 	// Delete middle row
 	table.DeleteByPK(int64(2))
 
-	// Verify PK index is still correct
+	// Verify SelectByPK still works correctly
 	row := table.SelectByPK(int64(3))
 	if row == nil {
 		t.Fatal("expected to find row with PK=3")

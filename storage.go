@@ -31,10 +31,9 @@ type Row struct {
 
 // Table holds the schema and data for a table
 type Table struct {
-	Def     *TableDef
-	Rows    []*Row
-	PkIndex map[interface{}]int // Primary key value -> row index
-	pkCol   int                 // Primary key column index (-1 if none)
+	Def   *TableDef
+	Rows  []*Row
+	pkCol int // Primary key column index (-1 if none)
 }
 
 // Database holds multiple tables
@@ -117,10 +116,9 @@ func (db *Database) CreateTable(def *TableDef) error {
 	}
 
 	db.Tables[name] = &Table{
-		Def:     def,
-		Rows:    make([]*Row, 0),
-		PkIndex: make(map[interface{}]int),
-		pkCol:   pkCol,
+		Def:   def,
+		Rows:  make([]*Row, 0),
+		pkCol: pkCol,
 	}
 	return nil
 }
@@ -145,6 +143,19 @@ func (t *Table) GetColumnIndex(name string) int {
 	name = strings.ToLower(name)
 	for i, col := range t.Def.Columns {
 		if strings.ToLower(col.Name) == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// findRowByPK scans table to find row index with matching primary key
+func (t *Table) findRowByPK(pk interface{}) int {
+	if t.pkCol < 0 {
+		return -1
+	}
+	for i, row := range t.Rows {
+		if row.Values[t.pkCol] == pk {
 			return i
 		}
 	}
@@ -183,23 +194,17 @@ func (t *Table) Insert(values []interface{}) error {
 		converted[i] = convVal
 	}
 
-	// Check primary key uniqueness
+	// Check primary key uniqueness (scan all rows)
 	if t.pkCol >= 0 {
 		pkVal := converted[t.pkCol]
-		if _, exists := t.PkIndex[pkVal]; exists {
+		if t.findRowByPK(pkVal) >= 0 {
 			return fmt.Errorf("%w: %v", ErrPrimaryKeyExists, pkVal)
 		}
 	}
 
 	// Insert row
 	row := &Row{Values: converted}
-	rowIdx := len(t.Rows)
 	t.Rows = append(t.Rows, row)
-
-	// Update PK index
-	if t.pkCol >= 0 {
-		t.PkIndex[converted[t.pkCol]] = rowIdx
-	}
 
 	return nil
 }
@@ -226,13 +231,10 @@ func (t *Table) SelectAll() []*Row {
 	return result
 }
 
-// SelectByPK returns a row by primary key value
+// SelectByPK returns a row by primary key value (scans all rows)
 func (t *Table) SelectByPK(pk interface{}) *Row {
-	if t.pkCol < 0 {
-		return nil
-	}
-	idx, exists := t.PkIndex[pk]
-	if !exists {
+	idx := t.findRowByPK(pk)
+	if idx < 0 {
 		return nil
 	}
 	return t.Rows[idx]
@@ -254,8 +256,8 @@ func (t *Table) UpdateByPK(pk interface{}, updates map[string]interface{}) error
 	if t.pkCol < 0 {
 		return ErrNoPrimaryKey
 	}
-	idx, exists := t.PkIndex[pk]
-	if !exists {
+	idx := t.findRowByPK(pk)
+	if idx < 0 {
 		return ErrRowNotFound
 	}
 	return t.updateRow(idx, updates)
@@ -306,23 +308,14 @@ func (t *Table) updateRow(idx int, updates map[string]interface{}) error {
 			return fmt.Errorf("%w for column %s: %v", ErrInvalidType, colDef.Name, err)
 		}
 
-		// Check PK uniqueness if updating PK
+		// Check PK uniqueness if updating PK (scan for duplicates)
 		if colIdx == t.pkCol && convVal != oldPkVal {
-			if _, exists := t.PkIndex[convVal]; exists {
+			if t.findRowByPK(convVal) >= 0 {
 				return fmt.Errorf("%w: %v", ErrPrimaryKeyExists, convVal)
 			}
 		}
 
 		row.Values[colIdx] = convVal
-	}
-
-	// Update PK index if PK changed
-	if t.pkCol >= 0 {
-		newPkVal := row.Values[t.pkCol]
-		if newPkVal != oldPkVal {
-			delete(t.PkIndex, oldPkVal)
-			t.PkIndex[newPkVal] = idx
-		}
 	}
 
 	return nil
@@ -333,11 +326,13 @@ func (t *Table) DeleteByPK(pk interface{}) error {
 	if t.pkCol < 0 {
 		return ErrNoPrimaryKey
 	}
-	idx, exists := t.PkIndex[pk]
-	if !exists {
+	idx := t.findRowByPK(pk)
+	if idx < 0 {
 		return ErrRowNotFound
 	}
-	return t.deleteRow(idx)
+	// Remove row
+	t.Rows = append(t.Rows[:idx], t.Rows[idx+1:]...)
+	return nil
 }
 
 // DeleteWhere deletes all rows matching the predicate
@@ -352,38 +347,11 @@ func (t *Table) DeleteWhere(predicate func(*Row) bool) (int, error) {
 
 	// Delete in reverse order
 	for i := len(toDelete) - 1; i >= 0; i-- {
-		if err := t.deleteRow(toDelete[i]); err != nil {
-			return len(toDelete) - 1 - i, err
-		}
+		idx := toDelete[i]
+		t.Rows = append(t.Rows[:idx], t.Rows[idx+1:]...)
 	}
 
 	return len(toDelete), nil
-}
-
-// deleteRow removes a row at the given index
-func (t *Table) deleteRow(idx int) error {
-	if idx < 0 || idx >= len(t.Rows) {
-		return ErrRowNotFound
-	}
-
-	// Remove from PK index
-	if t.pkCol >= 0 {
-		pkVal := t.Rows[idx].Values[t.pkCol]
-		delete(t.PkIndex, pkVal)
-	}
-
-	// Remove row (preserve order)
-	t.Rows = append(t.Rows[:idx], t.Rows[idx+1:]...)
-
-	// Rebuild PK index (indices shifted)
-	if t.pkCol >= 0 {
-		t.PkIndex = make(map[interface{}]int)
-		for i, row := range t.Rows {
-			t.PkIndex[row.Values[t.pkCol]] = i
-		}
-	}
-
-	return nil
 }
 
 // ConvertValue converts a value to the appropriate type for a column
