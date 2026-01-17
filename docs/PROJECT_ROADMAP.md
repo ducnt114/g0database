@@ -12,25 +12,45 @@
 
 ---
 
-## Current State (January 2025)
+## Current State (January 17, 2025)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Lexer** | Done | Tokenizes SQL statements correctly |
-| **Parser** | Partial | SELECT/CREATE work; INSERT/UPDATE/DELETE stubbed |
-| **Executor** | Stubbed | Returns placeholder responses |
-| **In-Memory Storage** | Not Started | No data persistence mechanism |
+| **Parser** | Done | Full CRUD parsing with WHERE, ORDER BY, LIMIT |
+| **Executor** | Done | Executes all CRUD operations |
+| **In-Memory Storage** | Done | Table storage with CRUD operations |
 | **MySQL Protocol** | Not Started | No network layer |
 
+### Test Summary
+- **Total Tests**: 83 passing
+- **Storage Tests**: 28 tests
+- **Parser Tests**: 18 tests
+- **Executor Tests**: 37 tests
+
 ### Existing Files
-- `lexer.go` - SQL tokenization
-- `parser.go` - AST construction
-- `executor.go` - Command execution (stub)
-- `command.go` - Command types and interfaces
-- `model.go` - Schema/Table/Column models
+
+**Core Components:**
+- `lexer.go` - SQL tokenization (keywords, identifiers, operators)
+- `parser.go` - AST construction (SELECT, INSERT, UPDATE, DELETE, CREATE, DROP)
+- `executor.go` - Command execution with Engine integration
+- `evaluator.go` - WHERE clause evaluation and predicate building
+- `storage.go` - In-memory table and row management (Engine, Database, Table, Row)
+
+**Support Files:**
+- `command.go` - Command types and interfaces (CommandSelect, CommandInsert, etc.)
+- `model.go` - Data types (DataType, Column)
 - `token.go` - Token definitions
+- `errors.go` - Error definitions (ErrTableNotFound, ErrColumnNotFound, etc.)
 - `data_source.go` - CSV data source (prototype)
 - `optimizer.go` - Empty placeholder
+
+**Test Files:**
+- `lexer_test.go` - Lexer unit tests
+- `parser_test.go` - Parser unit tests (18 tests)
+- `storage_test.go` - Storage engine unit tests (28 tests)
+- `executor_test.go` - Executor integration tests (37 tests)
+- `data_source_test.go` - CSV data source tests
 
 ---
 
@@ -167,16 +187,18 @@ Make it production-ready for unit tests.
 ## SQL Feature Support (Target)
 
 ### Must Have (Phase 1-4)
-- [ ] SELECT with WHERE, ORDER BY, LIMIT
-- [ ] INSERT (single and multi-row)
-- [ ] UPDATE with WHERE
-- [ ] DELETE with WHERE
-- [ ] CREATE TABLE / DROP TABLE
-- [ ] Primary keys
-- [ ] Basic data types: INT, BIGINT, VARCHAR, TEXT, DATETIME, BOOLEAN
-- [ ] Comparison operators: =, <>, <, >, <=, >=
-- [ ] Logical operators: AND, OR, NOT
+- [x] SELECT with WHERE, ORDER BY, LIMIT
+- [x] INSERT (single row)
+- [x] UPDATE with WHERE
+- [x] DELETE with WHERE
+- [x] CREATE TABLE / DROP TABLE
+- [x] Primary keys
+- [x] Basic data types: INT, BIGINT, VARCHAR, TEXT, DATETIME, BOOLEAN
+- [x] Comparison operators: =, <>, <, >, <=, >=
+- [x] Logical operators: AND, OR
 - [ ] NULL handling: IS NULL, IS NOT NULL
+- [ ] INSERT (multi-row)
+- [ ] NOT operator
 
 ### Nice to Have (Phase 5+)
 - [ ] INNER JOIN
@@ -271,14 +293,20 @@ type Database struct {
 - [x] DROP TABLE parsing
 - [x] Unit tests (18 parser tests)
 
-### Phase 3: Executor
-- [ ] SELECT execution
-- [ ] INSERT execution
-- [ ] UPDATE execution
-- [ ] DELETE execution
-- [ ] CREATE/DROP TABLE
-- [ ] Expression evaluation
-- [ ] Integration tests
+### Phase 3: Executor ✅ COMPLETE
+- [x] SELECT execution (with WHERE, ORDER BY, LIMIT)
+- [x] INSERT execution (with/without column names)
+- [x] UPDATE execution (with WHERE filtering)
+- [x] DELETE execution (with WHERE filtering)
+- [x] CREATE/DROP TABLE execution
+- [x] Expression evaluation (evaluator.go)
+- [x] Predicate building from WHERE clauses
+- [x] All comparison operators (=, <>, <, >, <=, >=)
+- [x] AND/OR logic support
+- [x] ORDER BY sorting (ASC/DESC, multiple columns)
+- [x] LIMIT support
+- [x] Result formatting
+- [x] Integration tests (37 executor tests, 83 total)
 
 ### Phase 4: MySQL Protocol
 - [ ] TCP server
